@@ -10,3 +10,4 @@ config.json
 # 测试图片不能添加
 *.jpg
 *.png
+*.webp

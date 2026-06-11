@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -78,6 +79,9 @@ func handleAnalyzeImage(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	clientConfig.BaseURL = config.BaseURL
 	client := openai.NewClientWithConfig(clientConfig)
 
+	//检测图片格式
+	imageFormat := detectImageFormat(base64Image)
+
 	//构建消息内容
 	resp, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 		Model: config.Model,
@@ -92,7 +96,7 @@ func handleAnalyzeImage(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 					{
 						Type: openai.ChatMessagePartTypeImageURL,
 						ImageURL: &openai.ChatMessageImageURL{
-							URL: "data:image/jpg;base64," + base64Image,
+							URL: "data:"+imageFormat+";base64," + base64Image,
 						},
 					},
 				},
@@ -115,6 +119,32 @@ func handleAnalyzeImage(ctx context.Context, request mcp.CallToolRequest) (*mcp.
     // 用config中的信息来创建一个OpenAI客户端
     // 调用视觉模型来分析图片
     // 拿到结果并且返回给LLM
+}
+
+//图像解码函数
+func detectImageFormat(base64Str string) string{
+	//Base64解码
+	decoded, err := base64.StdEncoding.DecodeString(base64Str)
+	if err != nil{
+		return "image/png"
+	}
+
+	//检查文件格式
+	switch{
+		case decoded[0] == 0xFF:
+		return "image/jpeg"
+		case decoded[0] == 0x89:
+		return "image/png"
+		case decoded[0] == 0x47:
+		return "image/gif"
+		case decoded[0] == 0x52:
+		return "image/webp"
+		case decoded[0] == 0x42:
+		return "image/bmp"
+		default:
+		return "image/png"
+	}
+	
 }
 
 //定义配置文件结构体
