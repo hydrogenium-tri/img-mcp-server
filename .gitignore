@@ -1,0 +1,12 @@
+# 忽略编译出来的可执行文件
+img-mcp-server
+
+# 忽略配置文件
+config.json
+
+# Go 编译缓存
+/tmp/
+
+# 测试图片不能添加
+*.jpg
+*.png
