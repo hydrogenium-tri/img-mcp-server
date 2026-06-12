@@ -10,29 +10,31 @@
 - 缓存自动过期清理（10 分钟 TTL）
 - 支持 JPEG / PNG / GIF / WebP / BMP 格式自动识别
 - 兼容 OpenAI API 格式，可接入硅基流动等国产平台
+- Docker 容器化部署，支持离线导出
 - 附带集成测试脚本和 Agent Skill 文件
 
 ## 项目结构
 
 ```
 .
-├── main.go          # 入口
-├── config.go        # 配置加载
-├── server.go        # MCP 服务器启动 + 路由注册
-├── tools.go         # MCP 工具定义 + 处理函数
-├── model.go         # 图片格式检测 + 视觉模型调用
-├── upload.go        # HTTP 上传接口
-├── cache.go         # 图片缓存（SHA256 去重 + TTL 过期）
-├── test.sh          # 集成测试脚本
-├── test.png         # 测试图片
-├── .skill/SKILL.md  # Agent Skill 文件
+├── Dockerfile        # Docker 容器化部署
+├── main.go           # 入口
+├── config.go         # 配置加载
+├── server.go         # MCP 服务器启动 + 路由注册
+├── tools.go          # MCP 工具定义 + 处理函数
+├── model.go          # 图片格式检测 + 视觉模型调用
+├── upload.go         # HTTP 上传接口
+├── cache.go          # 图片缓存（SHA256 去重 + TTL 过期）
+├── test.sh           # 集成测试脚本
+├── test.png          # 测试图片
+├── .skill/SKILL.md   # Agent Skill 文件
 ├── go.mod / go.sum
-└── config.json      # 配置文件（不提交到 Git）
+└── config.json       # 配置文件（不提交到 Git）
 ```
 
 ## 环境要求
 
-- Go 1.21+
+- Go 1.21+ 或 Docker
 - 一个支持多模态模型的 API Key（如硅基流动）
 
 ## 配置
@@ -56,6 +58,49 @@
 | api_key | API 密钥 ⚠️ 不要提交到 Git |
 | model | 多模态模型名称 |
 | port | 服务器监听端口 |
+
+## Docker 部署（推荐）
+
+```bash
+# 构建镜像（国内已内置 goproxy.cn 代理）
+docker build -t img-mcp-server .
+
+# 运行容器
+docker run -d --name img-mcp \
+  --restart always \
+  -p 8080:8080 \
+  -v /path/to/config.json:/app/config.json:ro \
+  img-mcp-server
+
+# 查看日志
+docker logs img-mcp
+```
+
+### 离线部署
+
+```bash
+# 导出镜像为 tar 文件
+docker save -o img-mcp-server.tar img-mcp-server
+
+# 传输到目标服务器
+scp img-mcp-server.tar user@server:/path/
+
+# 在服务器上加载
+docker load -i img-mcp-server.tar
+```
+
+### 端口映射
+
+默认容器内监听 8080，通过 `-p` 映射到任意宿主机端口：
+
+```bash
+# 映射到 9999 端口
+docker run -d --name img-mcp \
+  --restart always \
+  -p 9999:8080 \
+  -v /path/to/config.json:/app/config.json:ro \
+  img-mcp-server
+```
 
 ## 编译与运行
 
@@ -127,6 +172,15 @@ curl -X POST http://localhost:8080/mcp \
 项目附带 `.skill/SKILL.md`，安装后 AI Agent 可自动完成"上传图片 → 分析 → 返回结果"的完整流程。
 
 **安装方式：** 将 `.skill/SKILL.md` 复制到全局 Skill 目录或直接引用 GitHub 仓库。
+
+---
+
+## 安全建议
+
+部署到公网时建议：
+1. 通过 Nginx/Caddy 反向代理添加 HTTPS
+2. 将容器绑定到 `127.0.0.1:8080`，只允许反代访问
+3. 使用防火墙限制 /upload 接口的访问来源
 
 ## 许可证
 
