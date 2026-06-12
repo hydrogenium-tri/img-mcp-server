@@ -14,3 +14,6 @@ config.json
 
 # test照片可以提交
 !test.png
+
+# 不能提交镜像
+*.tar
