@@ -45,8 +45,9 @@ func startServer() {
 		server.WithStateLess(true),
 	)
 	mux := http.NewServeMux()
-	mux.Handle("/mcp", sseServer)
-	mux.HandleFunc("/upload", uploadHandler)
+	
+	mux.Handle("/mcp", authMiddleware(sseServer))
+	mux.Handle("/upload", authMiddleware(http.HandlerFunc(uploadHandler)))
 
 	http.ListenAndServe(addr, mux)
 }

@@ -14,6 +14,7 @@ type Config struct {
 	APIKey   string `json:"api_key"`
 	Model    string `json:"model"`
 	Port     int    `json:"port"`
+	AuthToken string `json:"auth_token"`
 }
 
 // 定义读取配置文件函数

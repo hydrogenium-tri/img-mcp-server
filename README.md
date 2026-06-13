@@ -10,6 +10,7 @@
 - 缓存自动过期清理（10 分钟 TTL）
 - 支持 JPEG / PNG / GIF / WebP / BMP 格式自动识别
 - 兼容 OpenAI API 格式，可接入硅基流动等国产平台
+- Bearer Token 认证，保护服务不被未授权访问
 - Docker 容器化部署，支持离线导出
 - 附带集成测试脚本和 Agent Skill 文件
 
@@ -25,6 +26,7 @@
 ├── model.go          # 图片格式检测 + 视觉模型调用
 ├── upload.go         # HTTP 上传接口
 ├── cache.go          # 图片缓存（SHA256 去重 + TTL 过期）
+├── auth.go           # Bearer Token 认证中间件
 ├── test.sh           # 集成测试脚本
 ├── test.png          # 测试图片
 ├── .skill/SKILL.md   # Agent Skill 文件
@@ -47,7 +49,8 @@
   "base_url": "https://api.siliconflow.cn/v1",
   "api_key": "sk-xxx",
   "model": "nex-agi/Nex-N2-Pro",
-  "port": 8080
+  "port": 8080,
+  "auth_token": "your-secret-token"
 }
 ```
 
@@ -58,6 +61,9 @@
 | api_key | API 密钥 ⚠️ 不要提交到 Git |
 | model | 多模态模型名称 |
 | port | 服务器监听端口 |
+| auth_token | 认证 Token（不设置则不启用认证） |
+
+> **热更新**：修改 `config.json` 后重启服务即可生效，无需重新编译。
 
 ## Docker 部署（推荐）
 
@@ -74,6 +80,9 @@ docker run -d --name img-mcp \
 
 # 查看日志
 docker logs img-mcp
+
+# 修改配置后重启
+docker restart img-mcp
 ```
 
 ### 离线部署
@@ -82,11 +91,9 @@ docker logs img-mcp
 # 导出镜像为 tar 文件
 docker save -o img-mcp-server.tar img-mcp-server
 
-# 传输到目标服务器
+# 传输到目标服务器并加载
 scp img-mcp-server.tar user@server:/path/
-
-# 在服务器上加载
-docker load -i img-mcp-server.tar
+ssh user@server "docker load -i /path/img-mcp-server.tar"
 ```
 
 ### 端口映射
@@ -105,15 +112,37 @@ docker run -d --name img-mcp \
 ## 编译与运行
 
 ```bash
-# 编译
 go build
-
-# 启动服务器（默认监听 :8080）
 ./img-mcp-server
-
-# 运行集成测试
 ./test.sh
 ```
+
+## 认证
+
+启用认证时，所有 API 请求需携带 `Authorization` 头：
+
+```bash
+curl -H "Authorization: Bearer your-token" http://localhost:8080/mcp ...
+```
+
+未携带或 Token 错误返回 `401 Unauthorized`。
+
+### 客户端配置
+
+**Zed / MCP 客户端**：在服务器配置里添加 headers：
+
+```json
+{
+  "Vision_MCP": {
+    "url": "https://your-server.com:9999/mcp",
+    "headers": {
+      "Authorization": "Bearer your-token"
+    }
+  }
+}
+```
+
+**Agent Skill**：Skill 会自动从配置读取 Token 并附加到请求中。
 
 ## MCP 工具
 
@@ -131,12 +160,16 @@ go build
 
 ## HTTP API
 
+所有接口均需认证（除非未配置 `auth_token`）。
+
 ### POST /upload
 
 上传图片到服务器缓存，返回唯一 ID。
 
 ```bash
-curl -X POST http://localhost:8080/upload -F "file=@图片.jpg"
+curl -X POST http://localhost:8080/upload \
+  -H "Authorization: Bearer your-token" \
+  -F "file=@图片.jpg"
 ```
 
 返回示例：
@@ -157,11 +190,13 @@ MCP 协议端点（Streamable HTTP，无状态模式）。
 # 查询工具列表
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-token" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 
 # 分析图片（用 cache_id）
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-token" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"analyze_image","arguments":{"cache_id":"abc123","prompt":"描述这张图片"}}}'
 ```
 
@@ -178,9 +213,10 @@ curl -X POST http://localhost:8080/mcp \
 ## 安全建议
 
 部署到公网时建议：
-1. 通过 Nginx/Caddy 反向代理添加 HTTPS
-2. 将容器绑定到 `127.0.0.1:8080`，只允许反代访问
-3. 使用防火墙限制 /upload 接口的访问来源
+1. 务必设置 `auth_token`，防止未授权访问
+2. 通过 Nginx/Caddy 反向代理添加 HTTPS
+3. 将容器绑定到 `127.0.0.1:8080`，只允许反代访问
+4. 使用防火墙限制访问来源 IP
 
 ## 许可证
 
