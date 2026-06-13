@@ -34,12 +34,9 @@
 └── config.json       # 配置文件（不提交到 Git）
 ```
 
-## 环境要求
+## 快速开始
 
-- Go 1.21+ 或 Docker
-- 一个支持多模态模型的 API Key（如硅基流动）
-
-## 配置
+### 1. 创建配置文件
 
 在项目根目录创建 `config.json`：
 
@@ -59,11 +56,39 @@
 | provider | 模型供应商名称 |
 | base_url | 供应商 API 地址（兼容 OpenAI 格式） |
 | api_key | API 密钥 ⚠️ 不要提交到 Git |
-| model | 多模态模型名称 |
+| model | 多模态模型名称（需支持视觉识别） |
 | port | 服务器监听端口 |
 | auth_token | 认证 Token（不设置则不启用认证） |
 
 > **热更新**：修改 `config.json` 后重启服务即可生效，无需重新编译。
+
+### 2. 编译运行
+
+```bash
+go build
+./img-mcp-server
+```
+
+### 3. 验证服务
+
+```bash
+# 查询工具列表（未启用认证时）
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+# 启用认证后需携带 Token
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-token" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+### 4. 运行集成测试
+
+```bash
+./test.sh
+```
 
 ## Docker 部署（推荐）
 
@@ -71,10 +96,10 @@
 # 构建镜像（国内已内置 goproxy.cn 代理）
 docker build -t img-mcp-server .
 
-# 运行容器
+# 运行容器（挂载配置文件 + 端口映射）
 docker run -d --name img-mcp \
   --restart always \
-  -p 8080:8080 \
+  -p 9999:8080 \
   -v /path/to/config.json:/app/config.json:ro \
   img-mcp-server
 
@@ -88,7 +113,7 @@ docker restart img-mcp
 ### 离线部署
 
 ```bash
-# 导出镜像为 tar 文件
+# 导出镜像
 docker save -o img-mcp-server.tar img-mcp-server
 
 # 传输到目标服务器并加载
@@ -96,40 +121,32 @@ scp img-mcp-server.tar user@server:/path/
 ssh user@server "docker load -i /path/img-mcp-server.tar"
 ```
 
-### 端口映射
+---
 
-默认容器内监听 8080，通过 `-p` 映射到任意宿主机端口：
+## Agent Skill 配置
 
-```bash
-# 映射到 9999 端口
-docker run -d --name img-mcp \
-  --restart always \
-  -p 9999:8080 \
-  -v /path/to/config.json:/app/config.json:ro \
-  img-mcp-server
-```
+项目附带 `.skill/SKILL.md`，安装到全局 Skill 目录后，AI Agent 可自动完成"上传图片 → 获取缓存 ID → 分析 → 返回结果"的完整流程。
 
-## 编译与运行
+### 安装 Skill
 
-```bash
-go build
-./img-mcp-server
-./test.sh
-```
+1. 从 GitHub 下载 `.skill/SKILL.md`
+2. 放入全局 Skill 目录 `~/.agents/skills/image-analysis/SKILL.md`
+3. 如果服务启用了认证，修改 Skill 中的 curl 命令，添加 Token 头
 
-## 认证
+### 配置服务器地址和 Token
 
-启用认证时，所有 API 请求需携带 `Authorization` 头：
+Skill 默认连接 `http://localhost:8080`。如果部署到远程服务器且启用了认证，需要将以下信息告知 Agent：
 
-```bash
-curl -H "Authorization: Bearer your-token" http://localhost:8080/mcp ...
-```
+- **服务器地址**：如 `https://www.megrez.space:9999`
+- **认证 Token**：如 `mcp-link`
 
-未携带或 Token 错误返回 `401 Unauthorized`。
+Agent 会在首次调用失败时询问这些信息，或用户可直接修改 Skill 文件。
 
-### 客户端配置
+---
 
-**Zed / MCP 客户端**：在服务器配置里添加 headers：
+## Zed / MCP 客户端配置
+
+在 Zed 或其他 MCP 客户端的配置文件中添加：
 
 ```json
 {
@@ -142,7 +159,11 @@ curl -H "Authorization: Bearer your-token" http://localhost:8080/mcp ...
 }
 ```
 
-**Agent Skill**：Skill 会自动从配置读取 Token 并附加到请求中。
+配置文件路径：
+- Zed：`~/.config/zed/mcp.json`
+- 其他客户端：参考对应文档
+
+---
 
 ## MCP 工具
 
@@ -158,7 +179,7 @@ curl -H "Authorization: Bearer your-token" http://localhost:8080/mcp ...
 
 ---
 
-## HTTP API
+## HTTP API 参考
 
 所有接口均需认证（除非未配置 `auth_token`）。
 
@@ -172,15 +193,10 @@ curl -X POST http://localhost:8080/upload \
   -F "file=@图片.jpg"
 ```
 
-返回示例：
+返回：`{"cache_id": "abc123..."}`
 
-```json
-{"cache_id": "abc123def456..."}
-```
-
-特点：
-- 使用 **SHA256 哈希** 作为缓存键，同一图片多次上传返回相同 `cache_id`
-- 图片缓存 **10 分钟** 后自动过期
+- 使用 **SHA256 哈希** 作为缓存键，同一图片多次上传返回相同 ID
+- 缓存 **10 分钟** 后自动过期
 
 ### POST /mcp
 
@@ -193,29 +209,27 @@ curl -X POST http://localhost:8080/mcp \
   -H "Authorization: Bearer your-token" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 
-# 分析图片（用 cache_id）
+# 分析图片（cache_id 方式）
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-token" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"analyze_image","arguments":{"cache_id":"abc123","prompt":"描述这张图片"}}}'
+
+# 分析图片（base64 方式）
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-token" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"analyze_image","arguments":{"base64":"iVBORw...","prompt":"描述"}}}'
 ```
-
----
-
-## Agent Skill
-
-项目附带 `.skill/SKILL.md`，安装后 AI Agent 可自动完成"上传图片 → 分析 → 返回结果"的完整流程。
-
-**安装方式：** 将 `.skill/SKILL.md` 复制到全局 Skill 目录或直接引用 GitHub 仓库。
 
 ---
 
 ## 安全建议
 
-部署到公网时建议：
+部署到公网时：
 1. 务必设置 `auth_token`，防止未授权访问
 2. 通过 Nginx/Caddy 反向代理添加 HTTPS
-3. 将容器绑定到 `127.0.0.1:8080`，只允许反代访问
+3. 容器绑定到 `127.0.0.1:8080`，仅允许反代访问
 4. 使用防火墙限制访问来源 IP
 
 ## 许可证

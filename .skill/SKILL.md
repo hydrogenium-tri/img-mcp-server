@@ -8,6 +8,7 @@ description: 当用户或你需要分析描述本地图片内容时通过MCP服�
 ## 前置条件
 - MCP服务器已经配置好（默认 http://localhost:8080）
 - 如果不知道或者不通，通知用户修改SKILL内容
+- 如果返回Unauthorized, 说明目标服务器配置了Token, 请咨询用户, 并要求用户填写到skill中
 
 ## 使用流程
 1. 首先通过curl向MCP服务器的/upload发送需要分析的图片，图片格式需要png、jpg、webp
