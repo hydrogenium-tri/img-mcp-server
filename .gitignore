@@ -7,13 +7,15 @@ config.json
 # Go 编译缓存
 /tmp/
 
-# 测试图片不能添加
+# 忽略个人图片
 *.jpg
-*.png
 *.webp
 
-# test照片可以提交
-!test.png
+# 测试图片子目录
+scope_*.png
+
+# 允许测试图片提交
+!sample_*.png
 
 # 不能提交镜像
 *.tar

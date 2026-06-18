@@ -36,7 +36,7 @@ func detectImageFormat(base64Str string) string{
 	
 }
 
-//创建OpenAI客户端
+//创建OpenAI客户端处理单张图片
 func callVisionModel(ctx context.Context, base64Image string, prompt string) (string, error){
 	//创建OpenaiAPI的客户端
 	clientConfig := openai.DefaultConfig(config.APIKey)
@@ -61,6 +61,55 @@ func callVisionModel(ctx context.Context, base64Image string, prompt string) (st
 						Type: openai.ChatMessagePartTypeImageURL,
 						ImageURL: &openai.ChatMessageImageURL{
 							URL: "data:"+imageFormat+";base64," + base64Image,
+						},
+					},
+				},
+			},
+		},
+		MaxTokens: 1000,	//限制返回长度
+	})
+	
+ 	if err != nil {
+        return "", err
+    }
+    if len(resp.Choices) > 0 {
+        return resp.Choices[0].Message.Content, nil
+    }
+    return "", fmt.Errorf("模型未返回有效结果")
+}
+
+//创建OpenAI客户端处理单张图片
+func callVisionModelDuo(ctx context.Context, base64ImageOne string, base64ImageTwo string, prompt string) (string, error){
+	//创建OpenaiAPI的客户端
+	clientConfig := openai.DefaultConfig(config.APIKey)
+	clientConfig.BaseURL = config.BaseURL
+	client := openai.NewClientWithConfig(clientConfig)
+
+	//检测图片格式
+	imageFormatOne := detectImageFormat(base64ImageOne)
+	imageFormatTwo := detectImageFormat(base64ImageTwo)
+
+	//构建消息内容
+	resp, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+		Model: config.Model,
+		Messages: []openai.ChatCompletionMessage{
+			{
+				Role: openai.ChatMessageRoleUser,
+				MultiContent: []openai.ChatMessagePart{
+					{
+						Type: openai.ChatMessagePartTypeText,
+						Text: prompt,
+					},
+					{
+						Type: openai.ChatMessagePartTypeImageURL,
+						ImageURL: &openai.ChatMessageImageURL{
+							URL: "data:"+imageFormatOne+";base64," + base64ImageOne,
+						},
+					},
+					{
+						Type: openai.ChatMessagePartTypeImageURL,
+						ImageURL: &openai.ChatMessageImageURL{
+							URL: "data:"+imageFormatTwo+";base64," + base64ImageTwo,
 						},
 					},
 				},
